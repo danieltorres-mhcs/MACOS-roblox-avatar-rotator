@@ -318,126 +318,163 @@ class AvatarRotator:
         log("Program terminated by user.", "info")
 
 # settings menu/gui
+settings_window_open = False
+settings_lock = threading.Lock()
+
 def open_settings():
-    if rotator.active: return 
-    root = tk.Tk()
-    root.title("Settings | Roblox Avatar Rotator")
-    root.geometry("450x550")
+    if rotator.active:
+        return
+
+    global settings_window_open
+    with settings_lock:
+        if settings_window_open:
+            return
+        settings_window_open = True
+
+    def run_window():
+        global settings_window_open
+        root = tk.Tk()
+        root.title("Settings | Roblox Avatar Rotator")
+        root.geometry("450x550")
+        root.protocol("WM_DELETE_WINDOW", root.destroy)
     
-    cfg = ConfigManager.load()
+        cfg = ConfigManager.load()
     
     # cookie
-    tk.Label(root, text="Roblox Cookie (.ROBLOSECURITY):").pack(pady=(10, 5))
-    lbl_warn = tk.Label(root, text="ⓘ Info: This is only used to send the avatar change requests.\n Do not share your cookie with anyone.", fg="red", font=("Arial", 8))
-    lbl_warn.pack(pady=2)
-    cookie_entry = tk.Entry(root, width=60, show="*")
-    cookie_entry.pack(pady=5)
-    if "cookie" in cfg: cookie_entry.insert(0, cfg["cookie"])
+        tk.Label(root, text="Roblox Cookie (.ROBLOSECURITY):").pack(pady=(10, 5))
+        lbl_warn = tk.Label(root, text="ⓘ Info: This is only used to send the avatar change requests.\n Do not share your cookie with anyone.", fg="red", font=("Arial", 8))
+        lbl_warn.pack(pady=2)
+        cookie_entry = tk.Entry(root, width=60, show="*")
+        cookie_entry.pack(pady=5)
+        if "cookie" in cfg:
+            cookie_entry.insert(0, cfg["cookie"])
 
     # outfits
-    tk.Label(root, text="Selected Outfits:").pack(pady=(10, 2))
+        tk.Label(root, text="Selected Outfits:").pack(pady=(10, 2))
     
     # listbox
-    listbox = Listbox(root, selectmode=MULTIPLE, width=50, height=10)
-    listbox.pack(pady=5)
+        listbox = Listbox(root, selectmode=MULTIPLE, width=50, height=10)
+        listbox.pack(pady=5)
 
-    fetched_map = {}
+        fetched_map = {}
 
-    def fetch_outfits():
-        cookie = cookie_entry.get().strip()
-        if not cookie:
-            messagebox.showerror("Error", "Please enter a cookie first.")
-            return
+        def set_fetch_state(is_fetching):
+            state = "disabled" if is_fetching else "normal"
+            fetch_btn.config(state=state)
 
-        rotator.bot.update_cookie(cookie)
-        
-        user = rotator.bot.get_authenticated_user()
-        if not user:
-            messagebox.showerror("Error", "Invalid Cookie. Could not authenticate.")
-            return
-            
-        messagebox.showinfo("Wait", "Fetching outfits... this may take a moment.")
-        
-        outfits = rotator.bot.fetch_user_outfits()
-        if not outfits:
-            messagebox.showwarning("Warning", "No outfits found or API error.")
-            return
-        
-        listbox.delete(0, END)
-        fetched_map.clear()
-        
-        saved_ids = []
-        if "outfits" in cfg and cfg["outfits"]:
-            if isinstance(cfg["outfits"][0], dict):
-                saved_ids = [o["id"] for o in cfg["outfits"]]
-            else:
-                saved_ids = cfg["outfits"]
+        def fetch_outfits_worker():
+            cookie = cookie_entry.get().strip()
+            if not cookie:
+                root.after(0, lambda: messagebox.showerror("Error", "Please enter a cookie first."))
+                root.after(0, lambda: set_fetch_state(False))
+                return
 
-        for i, o in enumerate(outfits):
-            listbox.insert(END, o["name"])
-            fetched_map[o["name"]] = o["id"]
-            if o["id"] in saved_ids:
+            rotator.bot.update_cookie(cookie)
+
+            user = rotator.bot.get_authenticated_user()
+            if not user:
+                root.after(0, lambda: messagebox.showerror("Error", "Invalid Cookie. Could not authenticate."))
+                root.after(0, lambda: set_fetch_state(False))
+                return
+
+            outfits = rotator.bot.fetch_user_outfits()
+            if not outfits:
+                root.after(0, lambda: messagebox.showwarning("Warning", "No outfits found or API error."))
+                root.after(0, lambda: set_fetch_state(False))
+                return
+
+            def update_list():
+                listbox.delete(0, END)
+                fetched_map.clear()
+
+                saved_ids = []
+                if "outfits" in cfg and cfg["outfits"]:
+                    if isinstance(cfg["outfits"][0], dict):
+                        saved_ids = [o["id"] for o in cfg["outfits"]]
+                    else:
+                        saved_ids = cfg["outfits"]
+
+                for i, o in enumerate(outfits):
+                    listbox.insert(END, o["name"])
+                    fetched_map[o["name"]] = o["id"]
+                    if o["id"] in saved_ids:
+                        listbox.selection_set(i)
+
+                set_fetch_state(False)
+
+            root.after(0, update_list)
+
+        def fetch_outfits():
+            set_fetch_state(True)
+            threading.Thread(target=fetch_outfits_worker, daemon=True).start()
+
+        fetch_btn = tk.Button(root, text="Fetch My Outfits", command=fetch_outfits)
+        fetch_btn.pack(pady=5)
+
+        if "outfits" in cfg and cfg["outfits"] and isinstance(cfg["outfits"][0], dict):
+            for i, o in enumerate(cfg["outfits"]):
+                listbox.insert(END, o["name"])
                 listbox.selection_set(i)
+                fetched_map[o["name"]] = o["id"]
 
-    tk.Button(root, text="Fetch My Outfits", command=fetch_outfits).pack(pady=5)
+        tk.Label(root, text="Cooldown (seconds):").pack(pady=(10, 2))
+        interval_spin = tk.Spinbox(root, from_=1, to=300, width=5)
+        interval_spin.pack()
+        current_interval = cfg.get("interval", 5)
+        interval_spin.delete(0, "end")
+        interval_spin.insert(0, current_interval)
 
-    if "outfits" in cfg and cfg["outfits"] and isinstance(cfg["outfits"][0], dict):
-        for i, o in enumerate(cfg["outfits"]):
-            listbox.insert(END, o["name"])
-            listbox.selection_set(i)
-            fetched_map[o["name"]] = o["id"]
-
-    tk.Label(root, text="Cooldown (seconds):").pack(pady=(10, 2))
-    interval_spin = tk.Spinbox(root, from_=1, to=300, width=5)
-    interval_spin.pack()
-    current_interval = cfg.get("interval", 5)
-    interval_spin.delete(0, "end")
-    interval_spin.insert(0, current_interval)
-
-    # warning
-    lbl_warn = tk.Label(root, text="⚠ Warning: < 3s uses high bandwidth & may hit API limits.", fg="red", font=("Arial", 8))
-    lbl_warn.pack(pady=2)
+        # warning
+        lbl_warn = tk.Label(root, text="⚠ Warning: < 3s uses high bandwidth & may hit API limits.", fg="red", font=("Arial", 8))
+        lbl_warn.pack(pady=2)
 
     # startup
-    startup_var = tk.BooleanVar(value=ConfigManager.get_startup_status())
-    tk.Checkbutton(root, text="Run on Windows Startup", variable=startup_var).pack(pady=10)
+        startup_var = tk.BooleanVar(value=ConfigManager.get_startup_status())
+        tk.Checkbutton(root, text="Run on Windows Startup", variable=startup_var).pack(pady=10)
 
-    def save():
-        selected_indices = listbox.curselection()
-        if not selected_indices:
-            messagebox.showwarning("Warning", "No outfits selected!")
-            return
+        def save():
+            selected_indices = listbox.curselection()
+            if not selected_indices:
+                messagebox.showwarning("Warning", "No outfits selected!")
+                return
 
-        selected_outfits = []
-        for i in selected_indices:
-            name = listbox.get(i)
-            if name in fetched_map:
-                selected_outfits.append({"id": fetched_map[name], "name": name})
-        
+            selected_outfits = []
+            for i in selected_indices:
+                name = listbox.get(i)
+                if name in fetched_map:
+                    selected_outfits.append({"id": fetched_map[name], "name": name})
+
+            try:
+                new_interval = int(interval_spin.get())
+            except:
+                new_interval = 5
+
+            new_cfg = {
+                "cookie": cookie_entry.get().strip(),
+                "outfits": selected_outfits,
+                "interval": new_interval
+            }
+            ConfigManager.save(new_cfg)
+            ConfigManager.toggle_startup(startup_var.get())
+
+            rotator.outfit_ids = [o["id"] for o in selected_outfits]
+            rotator.outfit_names = [o["name"] for o in selected_outfits]
+            rotator.interval = new_interval
+
+            messagebox.showinfo("Saved", "Settings saved!")
+            root.destroy()
+
+        tk.Label(root, text="Tool made by fowntain").pack(pady=(10, 5))
+
+        tk.Button(root, text="Save & Close", command=save, height=2, width=20, bg="#dddddd").pack(pady=10)
+
         try:
-            new_interval = int(interval_spin.get())
-        except:
-            new_interval = 5
+            root.mainloop()
+        finally:
+            with settings_lock:
+                settings_window_open = False
 
-        new_cfg = {
-            "cookie": cookie_entry.get().strip(),
-            "outfits": selected_outfits,
-            "interval": new_interval
-        }
-        ConfigManager.save(new_cfg)
-        ConfigManager.toggle_startup(startup_var.get())
-        
-        rotator.outfit_ids = [o["id"] for o in selected_outfits]
-        rotator.outfit_names = [o["name"] for o in selected_outfits]
-        rotator.interval = new_interval
-        
-        messagebox.showinfo("Saved", "Settings saved!")
-        root.destroy()
-
-    tk.Label(root, text="Tool made by fowntain").pack(pady=(10, 5))
-    
-    tk.Button(root, text="Save & Close", command=save, height=2, width=20, bg="#dddddd").pack(pady=10)
-    root.mainloop()
+    threading.Thread(target=run_window, daemon=True).start()
 
 # sys tray stuff
 # if ur reading this code hi and pls help me by improving the ui, make a pr thanks :)
