@@ -35,7 +35,7 @@ pip install -r requirements.txt
 
 5. Compile the application:
 ```bash
-pyinstaller --noconsole --onefile --name "RobloxRotator" --hidden-import=winotify --hidden-import=pystray main.pyw
+python -m PyInstaller --onefile --noconsole --name RobloxAvatarRotator main.pyw
 ```
 6. The executable will be generated in the `dist` folder.
 
