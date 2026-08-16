@@ -1,6 +1,7 @@
 # Roblox Avatar Rotator
 # Created by fowntain on all platforms (except twitter @fowntainwhat)
 # Modified for MacOS (tested on Monterey) by dan
+# I accidentally kept the .pyw extenion but it works, you can still use .py lol
 
 import requests
 import time
