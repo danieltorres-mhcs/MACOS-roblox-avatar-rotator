@@ -1,5 +1,6 @@
 # Roblox Avatar Rotator
 # Created by fowntain on all platforms (except twitter @fowntainwhat)
+# Modified for MacOS (tested on Monterey) by dan
 
 import requests
 import time
@@ -10,11 +11,10 @@ import sys
 import logging
 import tkinter as tk
 from tkinter import messagebox, Listbox, MULTIPLE, END
-import winreg
+import subprocess
 import pystray
 from PIL import Image, ImageDraw
 from pystray import MenuItem as item
-from winotify import Notification, audio
 
 # logging
 LOG_FILE = "rotator_log.txt"
@@ -33,11 +33,9 @@ def log(msg, level="info"):
     elif level == "warning": logging.warning(msg)
 
 def open_logs():
-    if os.path.exists(LOG_FILE):
-        os.startfile(LOG_FILE)
-    else:
+    if not os.path.exists(LOG_FILE):
         log("Log file created.", "info")
-        os.startfile(LOG_FILE)
+    subprocess.run(["open", LOG_FILE])
 
 # configs
 CONFIG_FILE = "config.json"
@@ -66,35 +64,12 @@ class ConfigManager:
 
     @staticmethod
     def get_startup_status():
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
-            winreg.QueryValueEx(key, APP_NAME)
-            winreg.CloseKey(key)
-            return True
-        except FileNotFoundError:
-            return False
+        return False
 
     @staticmethod
     def toggle_startup(enable):
-        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-            if enable:
-                exe = sys.executable.replace("python.exe", "pythonw.exe")
-                script = os.path.abspath(__file__)
-                cmd = f'"{exe}" "{script}"'
-                winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, cmd)
-                log("Added to Windows Startup.", "info")
-            else:
-                try:
-                    winreg.DeleteValue(key, APP_NAME)
-                    log("Removed from Windows Startup.", "info")
-                except FileNotFoundError:
-                    pass
-            winreg.CloseKey(key)
-        except Exception as e:
-            log(f"Startup Toggle Error: {e}", "error")
-
+        if enable:
+            log("Startup is not supported on macOS.", "warning")
 # api handler
 class RobloxAvatarManager:
     def __init__(self):
@@ -233,12 +208,7 @@ class AvatarRotator:
             self.send_toast("Setup Required", "Right-click tray -> Settings to configure.")
 
     def send_toast(self, title, msg):
-        try:
-            toast = Notification(app_id="Roblox Avatar Rotator", title=title, msg=msg, duration="short")
-            toast.set_audio(audio.Default, loop=False)
-            toast.show()
-        except:
-            pass 
+        log(f"{title}: {msg}", "info")
 
     def start_rotation(self):
         cfg = ConfigManager.load()
@@ -325,159 +295,248 @@ def open_settings():
     if rotator.active:
         return
 
-    global settings_window_open
-    with settings_lock:
-        if settings_window_open:
-            return
-        settings_window_open = True
+    try:
+        subprocess.Popen([
+            sys.executable,
+            os.path.abspath(__file__),
+            "--settings"
+        ])
+    except Exception as e:
+        log(f"Could not open Settings: {e}", "error")
 
-    def run_window():
-        global settings_window_open
-        root = tk.Tk()
-        root.title("Settings | Roblox Avatar Rotator")
-        root.geometry("450x550")
-        root.protocol("WM_DELETE_WINDOW", root.destroy)
-    
-        cfg = ConfigManager.load()
-    
-    # cookie
-        tk.Label(root, text="Roblox Cookie (.ROBLOSECURITY):").pack(pady=(10, 5))
-        lbl_warn = tk.Label(root, text="ⓘ Info: This is only used to send the avatar change requests.\n Do not share your cookie with anyone.", fg="red", font=("Arial", 8))
-        lbl_warn.pack(pady=2)
-        cookie_entry = tk.Entry(root, width=60, show="*")
-        cookie_entry.pack(pady=5)
-        if "cookie" in cfg:
-            cookie_entry.insert(0, cfg["cookie"])
+def run_settings_window():
+    root = tk.Tk()
+    root.title("Settings | Roblox Avatar Rotator")
+    root.geometry("450x550")
 
-    # outfits
-        tk.Label(root, text="Selected Outfits:").pack(pady=(10, 2))
-    
-    # listbox
-        listbox = Listbox(root, selectmode=MULTIPLE, width=50, height=10)
-        listbox.pack(pady=5)
+    cfg = ConfigManager.load()
 
-        fetched_map = {}
+    # Cookie
+    tk.Label(
+        root,
+        text="Roblox Cookie (.ROBLOSECURITY):"
+    ).pack(pady=(10, 5))
 
-        def set_fetch_state(is_fetching):
-            state = "disabled" if is_fetching else "normal"
-            fetch_btn.config(state=state)
+    tk.Label(
+        root,
+        text="ⓘ This is used to send avatar change requests.\nDo not share your cookie with anyone.",
+        fg="red",
+        font=("Arial", 8)
+    ).pack(pady=2)
 
-        def fetch_outfits_worker():
-            cookie = cookie_entry.get().strip()
-            if not cookie:
-                root.after(0, lambda: messagebox.showerror("Error", "Please enter a cookie first."))
-                root.after(0, lambda: set_fetch_state(False))
-                return
+    cookie_entry = tk.Entry(root, width=60, show="*")
+    cookie_entry.pack(pady=5)
 
-            rotator.bot.update_cookie(cookie)
+    if "cookie" in cfg:
+        cookie_entry.insert(0, cfg["cookie"])
 
-            user = rotator.bot.get_authenticated_user()
-            if not user:
-                root.after(0, lambda: messagebox.showerror("Error", "Invalid Cookie. Could not authenticate."))
-                root.after(0, lambda: set_fetch_state(False))
-                return
+    # Outfits
+    tk.Label(
+        root,
+        text="Selected Outfits:"
+    ).pack(pady=(10, 2))
 
-            outfits = rotator.bot.fetch_user_outfits()
-            if not outfits:
-                root.after(0, lambda: messagebox.showwarning("Warning", "No outfits found or API error."))
-                root.after(0, lambda: set_fetch_state(False))
-                return
+    listbox = Listbox(
+        root,
+        selectmode=MULTIPLE,
+        width=50,
+        height=10
+    )
+    listbox.pack(pady=5)
 
-            def update_list():
-                listbox.delete(0, END)
-                fetched_map.clear()
+    fetched_map = {}
 
-                saved_ids = []
-                if "outfits" in cfg and cfg["outfits"]:
-                    if isinstance(cfg["outfits"][0], dict):
-                        saved_ids = [o["id"] for o in cfg["outfits"]]
-                    else:
-                        saved_ids = cfg["outfits"]
-
-                for i, o in enumerate(outfits):
-                    listbox.insert(END, o["name"])
-                    fetched_map[o["name"]] = o["id"]
-                    if o["id"] in saved_ids:
-                        listbox.selection_set(i)
-
-                set_fetch_state(False)
-
-            root.after(0, update_list)
-
-        def fetch_outfits():
-            set_fetch_state(True)
-            threading.Thread(target=fetch_outfits_worker, daemon=True).start()
-
-        fetch_btn = tk.Button(root, text="Fetch My Outfits", command=fetch_outfits)
-        fetch_btn.pack(pady=5)
-
-        if "outfits" in cfg and cfg["outfits"] and isinstance(cfg["outfits"][0], dict):
-            for i, o in enumerate(cfg["outfits"]):
-                listbox.insert(END, o["name"])
+    # Load saved outfits
+    if "outfits" in cfg and cfg["outfits"]:
+        if isinstance(cfg["outfits"][0], dict):
+            for i, outfit in enumerate(cfg["outfits"]):
+                listbox.insert(END, outfit["name"])
                 listbox.selection_set(i)
-                fetched_map[o["name"]] = o["id"]
+                fetched_map[outfit["name"]] = outfit["id"]
 
-        tk.Label(root, text="Cooldown (seconds):").pack(pady=(10, 2))
-        interval_spin = tk.Spinbox(root, from_=1, to=300, width=5)
-        interval_spin.pack()
-        current_interval = cfg.get("interval", 5)
-        interval_spin.delete(0, "end")
-        interval_spin.insert(0, current_interval)
+    def fetch_outfits_worker():
+        cookie = cookie_entry.get().strip()
 
-        # warning
-        lbl_warn = tk.Label(root, text="⚠ Warning: < 3s uses high bandwidth & may hit API limits.", fg="red", font=("Arial", 8))
-        lbl_warn.pack(pady=2)
+        if not cookie:
+            root.after(
+                0,
+                lambda: messagebox.showerror(
+                    "Error",
+                    "Please enter a cookie first."
+                )
+            )
+            fetch_btn.config(state="normal")
+            return
 
-    # startup
-        startup_var = tk.BooleanVar(value=ConfigManager.get_startup_status())
-        tk.Checkbutton(root, text="Run on Windows Startup", variable=startup_var).pack(pady=10)
+        bot = RobloxAvatarManager()
+        bot.update_cookie(cookie)
 
-        def save():
-            selected_indices = listbox.curselection()
-            if not selected_indices:
-                messagebox.showwarning("Warning", "No outfits selected!")
-                return
+        user = bot.get_authenticated_user()
 
-            selected_outfits = []
-            for i in selected_indices:
-                name = listbox.get(i)
-                if name in fetched_map:
-                    selected_outfits.append({"id": fetched_map[name], "name": name})
+        if not user:
+            root.after(
+                0,
+                lambda: messagebox.showerror(
+                    "Error",
+                    "Could not authenticate with that cookie."
+                )
+            )
+            fetch_btn.config(state="normal")
+            return
 
-            try:
-                new_interval = int(interval_spin.get())
-            except:
-                new_interval = 5
+        outfits = bot.fetch_user_outfits()
 
-            new_cfg = {
-                "cookie": cookie_entry.get().strip(),
-                "outfits": selected_outfits,
-                "interval": new_interval
-            }
-            ConfigManager.save(new_cfg)
-            ConfigManager.toggle_startup(startup_var.get())
+        if not outfits:
+            root.after(
+                0,
+                lambda: messagebox.showwarning(
+                    "Warning",
+                    "No outfits found or the API returned an error."
+                )
+            )
+            fetch_btn.config(state="normal")
+            return
 
-            rotator.outfit_ids = [o["id"] for o in selected_outfits]
-            rotator.outfit_names = [o["name"] for o in selected_outfits]
-            rotator.interval = new_interval
+        def update_list():
+            listbox.delete(0, END)
+            fetched_map.clear()
 
-            messagebox.showinfo("Saved", "Settings saved!")
-            root.destroy()
+            saved_ids = []
 
-        tk.Label(root, text="Tool made by fowntain").pack(pady=(10, 5))
+            if cfg.get("outfits"):
+                if isinstance(cfg["outfits"][0], dict):
+                    saved_ids = [
+                        outfit["id"]
+                        for outfit in cfg["outfits"]
+                    ]
+                else:
+                    saved_ids = cfg["outfits"]
 
-        tk.Button(root, text="Save & Close", command=save, height=2, width=20, bg="#dddddd").pack(pady=10)
+            for i, outfit in enumerate(outfits):
+                listbox.insert(END, outfit["name"])
+                fetched_map[outfit["name"]] = outfit["id"]
+
+                if outfit["id"] in saved_ids:
+                    listbox.selection_set(i)
+
+            fetch_btn.config(state="normal")
+
+        root.after(0, update_list)
+
+    def fetch_outfits():
+        fetch_btn.config(state="disabled")
+
+        threading.Thread(
+            target=fetch_outfits_worker,
+            daemon=True
+        ).start()
+
+    fetch_btn = tk.Button(
+        root,
+        text="Fetch My Outfits",
+        command=fetch_outfits
+    )
+    fetch_btn.pack(pady=5)
+
+    # Cooldown
+    tk.Label(
+        root,
+        text="Cooldown (seconds):"
+    ).pack(pady=(10, 2))
+
+    interval_spin = tk.Spinbox(
+        root,
+        from_=1,
+        to=300,
+        width=5
+    )
+    interval_spin.pack()
+
+    interval_spin.delete(0, "end")
+    interval_spin.insert(
+        0,
+        cfg.get("interval", 5)
+    )
+
+    tk.Label(
+        root,
+        text="⚠ Below 3 seconds may hit API limits.",
+        fg="red",
+        font=("Arial", 8)
+    ).pack(pady=2)
+
+    # Windows startup — disabled on macOS
+    startup_var = tk.BooleanVar(value=False)
+
+    tk.Checkbutton(
+        root,
+        text="Run on Windows Startup (Windows only)",
+        variable=startup_var,
+        state="disabled"
+    ).pack(pady=10)
+
+    def save():
+        selected_indices = listbox.curselection()
+
+        if not selected_indices:
+            messagebox.showwarning(
+                "Warning",
+                "No outfits selected!"
+            )
+            return
+
+        selected_outfits = []
+
+        for index in selected_indices:
+            name = listbox.get(index)
+
+            if name in fetched_map:
+                selected_outfits.append({
+                    "id": fetched_map[name],
+                    "name": name
+                })
 
         try:
-            root.mainloop()
-        finally:
-            with settings_lock:
-                settings_window_open = False
+            new_interval = int(interval_spin.get())
+        except ValueError:
+            new_interval = 5
 
-    threading.Thread(target=run_window, daemon=True).start()
+        new_cfg = {
+            "cookie": cookie_entry.get().strip(),
+            "outfits": selected_outfits,
+            "interval": new_interval
+        }
+
+        ConfigManager.save(new_cfg)
+
+        messagebox.showinfo(
+            "Saved",
+            "Settings saved!"
+        )
+
+        root.destroy()
+
+    tk.Label(
+        root,
+        text="Tool made by fowntain"
+    ).pack(pady=(10, 5))
+
+    tk.Button(
+        root,
+        text="Save & Close",
+        command=save,
+        height=2,
+        width=20
+    ).pack(pady=10)
+
+    try:
+       root.mainloop()
+    finally:
+        with settings_lock:
+          settings_window_open = False
 
 # sys tray stuff
-# if ur reading this code hi and pls help me by improving the ui, make a pr thanks :)
+# aha! youre reading the code or commit changes! gotcha.
 def create_image():
     color = (0, 255, 100) if rotator.active else (255, 50, 50)
     image = Image.new('RGB', (64, 64), color=(30, 30, 30))
@@ -495,6 +554,10 @@ def on_toggle(icon, item):
 def on_exit(icon, item):
     rotator.terminate()
     icon.stop()
+    sys.exit()
+
+if "--settings" in sys.argv:
+    run_settings_window()
     sys.exit()
 
 rotator = AvatarRotator()
@@ -519,3 +582,5 @@ def icon_updater(icon):
 
 log("Application Started.", "info")
 icon.run(setup=icon_updater)
+
+# open_settings()
