@@ -1,4 +1,4 @@
-# Roblox Avatar Rotator
+# Roblox Avatar Rotator - MacOS native version
 A lightweight system tray application that automatically rotates your Roblox avatar between preset outfits, to create the effect that your avatar changes every time you reload.
 
 ## Features
@@ -12,35 +12,7 @@ A lightweight system tray application that automatically rotates your Roblox ava
 ## Installation
 Choose one of the following methods to install and run the application.
 
-### Executable (Recommended)
->[!WARNING]
->This method has had issues and may not work. It is reccommended to use the "Run as Python" method to ensure it works.
-1. Go to the <a href="https://github.com/fowntain/roblox-avatar-rotator/releases/latest">**Releases**</a>.
-2. Download `RobloxRotator.zip`.
-3. Extract the contents to a folder.
-4. Run `RobloxRotator.exe`.
-
-> [!NOTE]
-> *Since this app isn't digitally signed, Windows Defender or other antivirus software may flag it. You might have to whitelist the application or select "Run Anyway" to proceed. All the code is open-source, so you may look through it or compile it yourself.*
-
-
-### Build from Source (Advanced)
-1. Install [Python](https://www.python.org/downloads/).
-2. Clone or download this repository.
-3. Open a terminal in the `src` folder.
-4. Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-5. Compile the application:
-```bash
-python -m PyInstaller --onefile --noconsole --name RobloxAvatarRotator main.pyw
-```
-6. The executable will be generated in the `dist` folder.
-
-
-### Run as Python Script (Developer)
+### Run as Python Script (Developer) (Recommended)
 1. Install [Python](https://www.python.org/downloads/).
 2. Clone or download this repository.
 3. Open a terminal in the `src` folder.
@@ -59,16 +31,16 @@ pythonw main.pyw
 
 ## Usage
 
-1. **Launch the Application:** A tray icon will appear in your taskbar (system tray).
-2. **Open Settings:** Right-click the tray icon and select **Settings**.
-3. **Authentication:** Paste your `.ROBLOSECURITY` cookie into the field.
-4. **Select Outfits:** Click **Fetch My Outfits**, wait for the list to load, and select the outfits you wish to rotate.
-5. **Save:** Click **Save & Close**.
-6. **Start:** Right-click the tray icon and select **Start**.
+1. **Run the script** You will see a red dot at the top bar with your time and battery
+2. **Open settings** Click it then press settings
+3. **Set it** Input your `.ROBLOSECURITY` cookie and click Fetch outfits, you will have to wait for it to fetch.
+4. **Run it** Now you have selected your outfits you could resize the window if you cant see Save and Close. Once you press it. click the red dot at the top bar again and press Start.
+5. **All done!** Once you are done, click End Program or shut down as usual. You can set it to autostart too.
 
 ## Security Warning
 >[!WARNING]
 >This application requires your `.ROBLOSECURITY` cookie to function. This cookie grants full access to your Roblox account.
->* **Never share your cookie** with anyone.
+>* **Never** share your cookie with anyone.
 >* This application stores your configuration locally in a `config.json` file on your computer, so do NOT open this file when others can see your screen.
 >* The source code is provided in this repository for full transparency. You are encouraged to review `src/main.pyw` to ensure it is safe before use.
+>* We do not use your cookie for any malicious use. Review `src/main.pyw`/`src/main.py` for proof.
