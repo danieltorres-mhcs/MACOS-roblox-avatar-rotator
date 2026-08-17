@@ -1,5 +1,6 @@
 # Roblox Avatar Rotator - MacOS native version
 A lightweight system tray application that automatically rotates your Roblox avatar between preset outfits, to create the effect that your avatar changes every time you reload.
+- you could change the .pyw to .py it doesnt matter
 
 ## Features
 * **Stays in the background:** Runs silently in the system tray.
