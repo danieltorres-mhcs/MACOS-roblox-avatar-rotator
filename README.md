@@ -13,7 +13,7 @@ A lightweight system tray application that automatically rotates your Roblox ava
 Choose one of the following methods to install and run the application.
 
 ### Run as Python Script (Developer) (Recommended)
-1. Install [Python](https://www.python.org/downloads/).
+1. Install [Python]([https://www.python.org/downloads/](https://docs.brew.sh/Language-Runtimes-and-Packages#python)).
 2. Clone or download this repository.
 3. Open a terminal in the `src` folder.
 4. Install dependencies:
